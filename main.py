@@ -84,7 +84,7 @@ def relevant_filter_func(d: dict) -> float:
 
 
 def deadlines_filter_func(d: dict) -> float:
-    if "[консультация]" in d["name"].lower():  # TODO: [тест]
+    if "[тест]" in d["name"].lower():
         return False
     return True
 
@@ -99,7 +99,7 @@ def get_message_text() -> str:
     tests = list(filter(lambda t: not deadlines_filter_func(t) and relevant_filter_func(t), deadlines))
     deadlines = list(filter(lambda d: deadlines_filter_func(d) and relevant_filter_func(d), deadlines))
 
-    text = f"🧑‍💻 <b>Расписание экзаменов</b> (<i>Обновлено в {get_current_time()} 🔄</i>):\n\n"   # TODO: дедлайны
+    text = f"🔥️️ <b>Дедлайны</b> (<i>Обновлено в {get_current_time()} 🔄</i>):\n\n"
     tests = sorted(tests, key=timestamp_func)
     deadlines = sorted(deadlines, key=timestamp_func)
 
@@ -119,11 +119,10 @@ def get_message_text() -> str:
         text += get_human_time(deadlines[i]["time"]) + "</a>)\n\n"
 
     if len(tests) > 0:
-        text += f"\n👂<b>Консультации</b>:\n\n"  # TODO: тесты
+        text += f"\n🧑‍💻 <b>Тесты</b>:\n\n"
 
         for i in range(len(tests)):
-            # TODO: [тест]
-            test_name = tests[i]["name"].replace("[Консультация] ", "").replace("[консультация]", "")
+            test_name = tests[i]["name"].replace("[Тест] ", "").replace("[тест]", "")
             no = i + 1
             if no < 11:
                 no = NUMBER_EMOJIS[no] + " "
