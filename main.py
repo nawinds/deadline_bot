@@ -8,6 +8,13 @@ import locale
 from time import sleep
 import urllib.parse
 
+# Modify the links and data below:
+DEADLINES_URL = "https://m3104.nawinds.dev/api-deadlines"
+ADD_DEADLINE_LINK = "https://m3104.nawinds.dev/deadlines-editing-instructions/"
+BOT_NAME = "Дединсайдер M3104"
+BOT_USERNAME = "m3104_deadliner_bot"
+
+# Environment variables that should be available:
 TOKEN = os.getenv("TOKEN")
 MAIN_GROUP_ID = int(os.getenv("MAIN_GROUP_ID"))
 
@@ -34,7 +41,7 @@ def get_dt_obj_from_string(time: str) -> dt.datetime:
 def generate_link(event_name: str, event_time: str) -> str:
     dt_obj = get_dt_obj_from_string(event_time)
     formatted_time = dt_obj.strftime("%Y%m%d T%H%M%S%z")
-    description = "Дедлайн добавлен ботом Дединсайдер M3104 (https://t.me/m3104_deadliner_bot)"
+    description = f"Дедлайн добавлен ботом {BOT_NAME} (https://t.me/{BOT_USERNAME})"
     link = f"https://calendar.google.com/calendar/u/0/r/eventedit?" \
            f"text={urllib.parse.quote(event_name)}&" \
            f"dates={formatted_time}/{formatted_time}&details={urllib.parse.quote(description)}&" \
@@ -84,14 +91,14 @@ def relevant_filter_func(d: dict) -> float:
 
 
 def deadlines_filter_func(d: dict) -> float:
-    if "[консультация]" in d["name"].lower():  # TODO: [тест]
+    if "[тест]" in d["name"].lower():
         return False
     return True
 
 
 def get_message_text() -> str:
     try:
-        response = requests.get("https://m3104.nawinds.dev/api-deadlines").json()
+        response = requests.get(DEADLINES_URL).json()
     except Exception:
         return ""
     deadlines = response["deadlines"]
@@ -99,7 +106,7 @@ def get_message_text() -> str:
     tests = list(filter(lambda t: not deadlines_filter_func(t) and relevant_filter_func(t), deadlines))
     deadlines = list(filter(lambda d: deadlines_filter_func(d) and relevant_filter_func(d), deadlines))
 
-    text = f"🧑‍💻 <b>Расписание экзаменов</b> (<i>Обновлено в {get_current_time()} 🔄</i>):\n\n"   # TODO: дедлайны
+    text = f"🔥️️ <b>Дедлайны</b> (<i>Обновлено в {get_current_time()} 🔄</i>):\n\n"
     tests = sorted(tests, key=timestamp_func)
     deadlines = sorted(deadlines, key=timestamp_func)
 
@@ -119,11 +126,10 @@ def get_message_text() -> str:
         text += get_human_time(deadlines[i]["time"]) + "</a>)\n\n"
 
     if len(tests) > 0:
-        text += f"\n👂<b>Консультации</b>:\n\n"  # TODO: тесты
+        text += f"\n🧑‍💻 <b>Тесты</b>:\n\n"
 
         for i in range(len(tests)):
-            # TODO: [тест]
-            test_name = tests[i]["name"].replace("[Консультация] ", "").replace("[консультация]", "")
+            test_name = tests[i]["name"].replace("[Тест] ", "").replace("[тест]", "")
             no = i + 1
             if no < 11:
                 no = NUMBER_EMOJIS[no] + " "
@@ -135,7 +141,7 @@ def get_message_text() -> str:
             text += f"\n(<a href='{generate_link(test_name, tests[i]['time'])}'>"
             text += get_human_time(tests[i]["time"]) + "</a>)\n\n"
 
-    text += f"\n🆕 <a href='https://m3104.nawinds.dev/deadlines-editing-instructions/'>" \
+    text += f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>" \
             f"Добавить дедлайн/тест</a>"
     return text
 
