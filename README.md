@@ -2,6 +2,15 @@
 
 This bot is made for Telegram and is used to fetch deadlines and upcoming tests from a specific URL and send them to a specified Telegram groupchat as a reminder. The time remaining is also displayed and updated every minute. After 1 day, the message is deleted as it is expected that the new message is sent.
 
+![img.png](img.png)
+
+# Features
+- Irrelevant deadlines are not shown automatically
+- Tests and quizzes are shown in a separate section
+- Every deadline has a countdown in a human-readable format (updated every minute)
+- Deadline times have links for adding them to Google calendar
+- There are versions for both deadlines + tests and exams + consultations (for exam period)
+
 # Before first run
 Before running this script, please ensure the following links and bot data is relevant for you and modify it at the top of the `main.py` file if needed:
 
@@ -22,4 +31,4 @@ MAIN_GROUP_ID = int(os.getenv("MAIN_GROUP_ID"))  # ID of the group the bot is ex
 ```
 
 # How to run
-This is a very simple script that can be run as a cron job. Just configure the crontab to start `main.py` every day at a specific time and it will fetch the deadlines and send them to the specified groupchat.
+This is a very simple script that can be run as a cron job. Just configure the crontab to start `main.py` every day at a specific time and it will fetch the deadlines and send them to the specified group chat.
