@@ -18,18 +18,17 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
       - name: Debug SSH Connection
         run: |
           ssh -v -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.SERVER_IP }} "echo 'SSH Connection Successful'"
 
-
-      - name: Deploy to SSH Server
-        uses: appleboy/scp-action@v0.1.0
+      - name: Deploy Files with Rsync
+        uses: appleboy/rsync-action@v0.1.3
         with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "."
           target: ${{ secrets.PROJECT_PATH }}
-          port: "22"
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.USERNAME }}
