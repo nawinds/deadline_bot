@@ -24,5 +24,6 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: ""
+          source: "."
           target: ${{ secrets.PROJECT_PATH }}
+          port: 22
