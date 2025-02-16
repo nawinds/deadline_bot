@@ -18,10 +18,11 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Deploy to server
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.SERVER_IP }} "
-            cd ${{ secrets.PROJECT_PATH }} &&
-            git fetch origin deploy &&
-            git reset --hard origin/deploy
-          "
+      - name: Deploy to SSH Server
+        uses: appleboy/scp-action@v0.1.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: ""
+          target: ${{ secrets.PROJECT_PATH }}
