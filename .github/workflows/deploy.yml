@@ -24,11 +24,11 @@ jobs:
         run: |
           ssh -v -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.SERVER_IP }} "echo 'SSH Connection Successful'"
 
-      - name: Deploy Files with Rsync
-        uses: appleboy/rsync-action@v0.1.3
+      - name: Deploy Files using Rsync
+        uses: appleboy/ssh-action@v0.1.10
         with:
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
-          target: ${{ secrets.PROJECT_PATH }}
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            rsync -avz --delete --exclude='.git' $GITHUB_WORKSPACE/ ${{ secrets.USERNAME }}@${{ secrets.SERVER_IP }}:${{ secrets.PROJECT_PATH }}
