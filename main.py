@@ -119,7 +119,13 @@ def get_message_text() -> str:
             no = NUMBER_EMOJIS[no] + " "
         else:
             no += ". "
-        text += str(no) + "<b>" + deadlines[i]["name"]
+        text += str(no) + "<b>"
+
+        if deadlines[i].get("url"):
+            text += f"<a href='{deadlines[i]['url']}'>{deadlines[i]['name']}</a>"
+        else:
+            text += deadlines[i]["name"]
+
         text += "</b> — "
         text += get_human_timedelta(deadlines[i]["time"])
         text += f"\n(<a href='{generate_link(deadlines[i]['name'], deadlines[i]['time'])}'>"
