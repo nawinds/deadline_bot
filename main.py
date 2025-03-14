@@ -9,7 +9,7 @@ from time import sleep
 import urllib.parse
 
 # Modify the links and data below:
-DEADLINES_URL = "https://m3104.nawinds.dev/api-deadlines"
+DEADLINES_URL = "https://m3104.nawinds.dev/DEADLINES.json"
 ADD_DEADLINE_LINK = "https://m3104.nawinds.dev/deadlines-editing-instructions/"
 BOT_NAME = "Дединсайдер M3104"
 BOT_USERNAME = "m3104_deadliner_bot"
