@@ -7,6 +7,7 @@ import datetime as dt
 import locale
 from time import sleep
 import urllib.parse
+import aiohttp
 
 # Modify the links and data below:
 DEADLINES_URL = "https://m3104.nawinds.dev/DEADLINES.json"
@@ -19,27 +20,25 @@ TOKEN = os.getenv("TOKEN")
 MAIN_GROUP_ID = int(os.getenv("MAIN_GROUP_ID"))
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 bot = Bot(TOKEN)
 
 NUMBER_EMOJIS = ['0.', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
 
-
-def get_current_time() -> str:
+async def get_current_time() -> str:
     current_time = dt.datetime.now()
     current_time_hour = current_time.hour if current_time.hour >= 10 else "0" + str(current_time.hour)
-    current_time_minute = current_time.minute if current_time.minute >= 10 else \
-        "0" + str(current_time.minute)
+    current_time_minute = current_time.minute if current_time.minute >= 10 else "0" + str(current_time.minute)
     return f"{current_time_hour}:{current_time_minute}"
 
-
-def get_dt_obj_from_string(time: str) -> dt.datetime:
+async def get_dt_obj_from_string(time: str) -> dt.datetime:
     time = time.replace('GMT+3', '+0300')
     locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
     return dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z")
 
-
-def generate_link(event_name: str, event_time: str) -> str:
-    dt_obj = get_dt_obj_from_string(event_time)
+async def generate_link(event_name: str, event_time: str) -> str:
+    dt_obj = await get_dt_obj_from_string(event_time)
     formatted_time = dt_obj.strftime("%Y%m%d T%H%M%S%z")
     description = f"Дедлайн добавлен ботом {BOT_NAME} (https://t.me/{BOT_USERNAME})"
     link = f"https://calendar.google.com/calendar/u/0/r/eventedit?" \
@@ -48,9 +47,8 @@ def generate_link(event_name: str, event_time: str) -> str:
            f"color=6"
     return link
 
-
-def get_human_timedelta(time: str) -> str:
-    dt_obj = get_dt_obj_from_string(time)
+async def get_human_timedelta(time: str) -> str:
+    dt_obj = await get_dt_obj_from_string(time)
     dt_now = dt.datetime.now(dt_obj.tzinfo)  # Ensure timezones are consistent
     delta = dt_obj - dt_now
 
@@ -68,47 +66,43 @@ def get_human_timedelta(time: str) -> str:
     else:
         return f"{hours}ч {minutes}м"
 
-
-def get_human_time(time: str) -> str:
-    dt_obj = get_dt_obj_from_string(time)
+async def get_human_time(time: str) -> str:
+    dt_obj = await get_dt_obj_from_string(time)
     locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
     formatted_date = dt_obj.strftime("%a, %d %B в %H:%M")
     return formatted_date
 
-
-def timestamp_func(a: dict) -> float:
+async def timestamp_func(a: dict) -> float:
     time = a["time"].replace('GMT+3', '+0300')
     locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
     a_timestamp = dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z").timestamp()
     return a_timestamp  # 29 Oct 2024 23:59:59 GMT+3
 
-
-def relevant_filter_func(d: dict) -> float:
-    dt_obj = get_dt_obj_from_string(d["time"])
+async def relevant_filter_func(d: dict) -> bool:
+    dt_obj = await get_dt_obj_from_string(d["time"])
     if dt_obj < dt.datetime.now(dt_obj.tzinfo):
         return False
     return True
 
-
-def deadlines_filter_func(d: dict) -> float:
+async def deadlines_filter_func(d: dict) -> bool:
     if "[тест]" in d["name"].lower():
         return False
     return True
 
-
-def get_message_text() -> str:
+async def get_message_text() -> str:
     try:
         response = requests.get(DEADLINES_URL).json()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to fetch deadlines: {e}")
         return ""
     deadlines = response["deadlines"]
 
-    tests = list(filter(lambda t: not deadlines_filter_func(t) and relevant_filter_func(t), deadlines))
-    deadlines = list(filter(lambda d: deadlines_filter_func(d) and relevant_filter_func(d), deadlines))
+    tests = list(filter(lambda t: not await deadlines_filter_func(t) and await relevant_filter_func(t), deadlines))
+    deadlines = list(filter(lambda d: await deadlines_filter_func(d) and await relevant_filter_func(d), deadlines))
 
-    text = f"🔥️️ <b>Дедлайны</b> (<i>Обновлено в {get_current_time()} 🔄</i>):\n\n"
-    tests = sorted(tests, key=timestamp_func)
-    deadlines = sorted(deadlines, key=timestamp_func)
+    text = f"🔥️️ <b>Дедлайны</b> (<i>Обновлено в {await get_current_time()} 🔄</i>):\n\n"
+    tests = sorted(tests, key=lambda x: await timestamp_func(x))
+    deadlines = sorted(deadlines, key=lambda x: await timestamp_func(x))
 
     if len(deadlines) == 0:
         text += "Дедлайнов нет)\n\n"
@@ -127,9 +121,9 @@ def get_message_text() -> str:
             text += deadlines[i]["name"]
 
         text += "</b> — "
-        text += get_human_timedelta(deadlines[i]["time"])
-        text += f"\n(<a href='{generate_link(deadlines[i]['name'], deadlines[i]['time'])}'>"
-        text += get_human_time(deadlines[i]["time"]) + "</a>)\n\n"
+        text += await get_human_timedelta(deadlines[i]["time"])
+        text += f"\n(<a href='{await generate_link(deadlines[i]['name'], deadlines[i]['time'])}'>"
+        text += await get_human_time(deadlines[i]["time"]) + "</a>)\n\n"
 
     if len(tests) > 0:
         text += f"\n🧑‍💻 <b>Тесты</b>:\n\n"
@@ -143,33 +137,43 @@ def get_message_text() -> str:
                 no += ". "
             text += str(no) + "<b>" + test_name
             text += "</b> — "
-            text += get_human_timedelta(tests[i]["time"])
-            text += f"\n(<a href='{generate_link(test_name, tests[i]['time'])}'>"
-            text += get_human_time(tests[i]["time"]) + "</a>)\n\n"
+            text += await get_human_timedelta(tests[i]["time"])
+            text += f"\n(<a href='{await generate_link(test_name, tests[i]['time'])}'>"
+            text += await get_human_time(tests[i]["time"]) + "</a>)\n\n"
 
     text += f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>" \
             f"Добавить дедлайн/тест</a>"
     return text
 
-
 async def send_deadlines(chat_id: int) -> None:
-    text = get_message_text()
-    msg = await bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
-    started_updating = dt.datetime.now()
-    while dt.datetime.now() - started_updating < dt.timedelta(days=1):
-        sleep(60)
-        new_text = get_message_text()
-        if text != new_text and new_text != "":
-            await msg.edit_text(new_text, parse_mode="HTML", disable_web_page_preview=True)
-            text = new_text
-    await msg.delete()
-
+    retries = 3
+    for attempt in range(retries):
+        try:
+            text = await get_message_text()
+            msg = await bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
+            started_updating = dt.datetime.now()
+            while dt.datetime.now() - started_updating < dt.timedelta(days=1):
+                await asyncio.sleep(60)
+                new_text = await get_message_text()
+                if text != new_text and new_text != "":
+                    await msg.edit_text(new_text, parse_mode="HTML", disable_web_page_preview=True)
+                    text = new_text
+            await msg.delete()
+            break
+        except aiohttp.ClientConnectorError as e:
+            logger.error(f"Attempt {attempt + 1} failed: {e}")
+            if attempt < retries - 1:
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                raise
 
 async def main():
-    await send_deadlines(MAIN_GROUP_ID)
-
-    await bot.session.close()
-
+    try:
+        await send_deadlines(MAIN_GROUP_ID)
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+    finally:
+        await bot.session.close()
 
 if __name__ == '__main__':
     asyncio.run(main())
