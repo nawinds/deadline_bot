@@ -32,13 +32,13 @@ async def get_current_time() -> str:
     current_time_minute = current_time.minute if current_time.minute >= 10 else "0" + str(current_time.minute)
     return f"{current_time_hour}:{current_time_minute}"
 
-async def get_dt_obj_from_string(time: str) -> dt.datetime:
+def get_dt_obj_from_string(time: str) -> dt.datetime:
     time = time.replace('GMT+3', '+0300')
     locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
     return dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z")
 
 async def generate_link(event_name: str, event_time: str) -> str:
-    dt_obj = await get_dt_obj_from_string(event_time)
+    dt_obj = get_dt_obj_from_string(event_time)
     formatted_time = dt_obj.strftime("%Y%m%d T%H%M%S%z")
     description = f"Дедлайн добавлен ботом {BOT_NAME} (https://t.me/{BOT_USERNAME})"
     link = f"https://calendar.google.com/calendar/u/0/r/eventedit?" \
@@ -48,7 +48,7 @@ async def generate_link(event_name: str, event_time: str) -> str:
     return link
 
 async def get_human_timedelta(time: str) -> str:
-    dt_obj = await get_dt_obj_from_string(time)
+    dt_obj = get_dt_obj_from_string(time)
     dt_now = dt.datetime.now(dt_obj.tzinfo)  # Ensure timezones are consistent
     delta = dt_obj - dt_now
 
@@ -67,24 +67,24 @@ async def get_human_timedelta(time: str) -> str:
         return f"{hours}ч {minutes}м"
 
 async def get_human_time(time: str) -> str:
-    dt_obj = await get_dt_obj_from_string(time)
+    dt_obj = get_dt_obj_from_string(time)
     locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
     formatted_date = dt_obj.strftime("%a, %d %B в %H:%M")
     return formatted_date
 
-async def timestamp_func(a: dict) -> float:
+def timestamp_func(a: dict) -> float:
     time = a["time"].replace('GMT+3', '+0300')
     locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
     a_timestamp = dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z").timestamp()
     return a_timestamp  # 29 Oct 2024 23:59:59 GMT+3
 
-async def relevant_filter_func(d: dict) -> bool:
-    dt_obj = await get_dt_obj_from_string(d["time"])
+def relevant_filter_func(d: dict) -> bool:
+    dt_obj = get_dt_obj_from_string(d["time"])
     if dt_obj < dt.datetime.now(dt_obj.tzinfo):
         return False
     return True
 
-async def deadlines_filter_func(d: dict) -> bool:
+def deadlines_filter_func(d: dict) -> bool:
     if "[тест]" in d["name"].lower():
         return False
     return True
@@ -97,12 +97,12 @@ async def get_message_text() -> str:
         return ""
     deadlines = response["deadlines"]
 
-    tests = list(filter(lambda t: not await deadlines_filter_func(t) and await relevant_filter_func(t), deadlines))
-    deadlines = list(filter(lambda d: await deadlines_filter_func(d) and await relevant_filter_func(d), deadlines))
+    tests = list(filter(lambda t: not deadlines_filter_func(t) and relevant_filter_func(t), deadlines))
+    deadlines = list(filter(lambda d: deadlines_filter_func(d) and relevant_filter_func(d), deadlines))
 
     text = f"🔥️️ <b>Дедлайны</b> (<i>Обновлено в {await get_current_time()} 🔄</i>):\n\n"
-    tests = sorted(tests, key=lambda x: await timestamp_func(x))
-    deadlines = sorted(deadlines, key=lambda x: await timestamp_func(x))
+    tests = sorted(tests, key=lambda x: timestamp_func(x))
+    deadlines = sorted(deadlines, key=lambda x: timestamp_func(x))
 
     if len(deadlines) == 0:
         text += "Дедлайнов нет)\n\n"
