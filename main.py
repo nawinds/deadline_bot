@@ -146,7 +146,7 @@ async def get_message_text() -> str:
     return text
 
 async def send_deadlines(chat_id: int) -> None:
-    retries = 3
+    retries = 20
     for attempt in range(retries):
         try:
             text = await get_message_text()
