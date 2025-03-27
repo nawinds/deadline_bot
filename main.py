@@ -5,14 +5,13 @@ import asyncio
 from aiogram import Bot
 import datetime as dt
 import locale
-from time import sleep
 import urllib.parse
 import aiohttp
 
 # Modify the links and data below:
-DEADLINES_URL = "https://m3104.nawinds.dev/DEADLINES.json"
-ADD_DEADLINE_LINK = "https://m3104.nawinds.dev/deadlines-editing-instructions/"
-BOT_NAME = "Дединсайдер M3104"
+DEADLINES_URL = "https://m3102.nawinds.dev/DEADLINES.json"
+ADD_DEADLINE_LINK = "https://m3102.nawinds.dev/deadlines-editing-instructions/"
+BOT_NAME = "Дединсайдер"
 BOT_USERNAME = "m3104_deadliner_bot"
 
 # Environment variables that should be available:
