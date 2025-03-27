@@ -3,7 +3,7 @@ name: Deploy to Server
 on:
   push:
     branches:
-      - main
+      - m3102
 
 jobs:
   deploy:
@@ -22,4 +22,4 @@ jobs:
 
       - name: Deploy Files using Rsync
         run: |
-          rsync -avz --exclude='.git' -e "ssh" $GITHUB_WORKSPACE/ ${{ secrets.USERNAME }}@${{ secrets.SERVER_IP }}:${{ secrets.PROJECT_PATH }}
+          rsync -avz --exclude='.git' -e "ssh" $GITHUB_WORKSPACE/ ${{ secrets.USERNAME }}@${{ secrets.SERVER_IP }}:${{ secrets.M3102_PROJECT_PATH }}
