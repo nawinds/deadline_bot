@@ -6,7 +6,6 @@ from aiogram import Bot
 import datetime as dt
 import locale
 import urllib.parse
-import aiohttp
 
 # Modify the links and data below:
 DEADLINES_URL = "https://m3102.nawinds.dev/DEADLINES.json"
@@ -19,7 +18,6 @@ TOKEN = os.getenv("TOKEN")
 MAIN_GROUP_ID = int(os.getenv("MAIN_GROUP_ID"))
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 bot = Bot(TOKEN)
 
@@ -145,34 +143,22 @@ async def get_message_text() -> str:
     return text
 
 async def send_deadlines(chat_id: int) -> None:
-    retries = 20
-    for attempt in range(retries):
-        try:
-            text = await get_message_text()
-            msg = await bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
-            started_updating = dt.datetime.now()
-            while dt.datetime.now() - started_updating < dt.timedelta(days=1):
-                await asyncio.sleep(60)
-                new_text = await get_message_text()
-                if text != new_text and new_text != "":
-                    await msg.edit_text(new_text, parse_mode="HTML", disable_web_page_preview=True)
-                    text = new_text
-            await msg.delete()
-            break
-        except aiohttp.ClientConnectorError as e:
-            logger.error(f"Attempt {attempt + 1} failed: {e}")
-            if attempt < retries - 1:
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-            else:
-                raise
+    text = await get_message_text()
+    msg = await bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
+    started_updating = dt.datetime.now()
+    while dt.datetime.now() - started_updating < dt.timedelta(days=1):
+        await asyncio.sleep(60)
+        new_text = await get_message_text()
+        if text != new_text and new_text != "":
+            await msg.edit_text(new_text, parse_mode="HTML", disable_web_page_preview=True)
+            text = new_text
+    await msg.delete()
+
 
 async def main():
-    try:
-        await send_deadlines(MAIN_GROUP_ID)
-    except Exception as e:
-        logger.error(f"An error occurred: {e}")
-    finally:
-        await bot.session.close()
+    await send_deadlines(MAIN_GROUP_ID)
+    await bot.session.close()
+
 
 if __name__ == '__main__':
     asyncio.run(main())
