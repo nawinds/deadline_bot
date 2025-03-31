@@ -90,7 +90,7 @@ async def get_message_text() -> str:
     try:
         response = requests.get(DEADLINES_URL).json()
     except Exception as e:
-        logger.error(f"Failed to fetch deadlines: {e}")
+        print(f"Failed to fetch deadlines: {e}")
         return ""
     deadlines = response["deadlines"]
 
