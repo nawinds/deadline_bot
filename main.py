@@ -149,10 +149,14 @@ async def send_deadlines(chat_id: int) -> None:
     started_updating = dt.datetime.now()
     while dt.datetime.now() - started_updating < dt.timedelta(days=1):
         await asyncio.sleep(60)
-        new_text = await get_message_text()
-        if text != new_text and new_text != "":
-            await msg.edit_text(new_text, parse_mode="HTML", disable_web_page_preview=True)
-            text = new_text
+        try:
+            new_text = await get_message_text()
+            if text != new_text and new_text != "":
+                await msg.edit_text(new_text, parse_mode="HTML", disable_web_page_preview=True)
+                text = new_text
+        except Exception as e:
+            logging.warning(f"Ошибка при обновлении сообщения: {e}")
+            continue
     await msg.delete()
 
 
