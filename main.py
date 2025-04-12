@@ -6,6 +6,7 @@ from aiogram import Bot
 import datetime as dt
 import locale
 import urllib.parse
+from typing import Optional
 
 # Modify the links and data below:
 DEADLINES_URL = "https://m3102.nawinds.dev/DEADLINES.json"
@@ -29,45 +30,59 @@ async def get_current_time() -> str:
     current_time_minute = current_time.minute if current_time.minute >= 10 else "0" + str(current_time.minute)
     return f"{current_time_hour}:{current_time_minute}"
 
-def get_dt_obj_from_string(time: str) -> dt.datetime:
+def get_dt_obj_from_string(time: str) -> Optional[dt.datetime]:
     time = time.replace('GMT+3', '+0300')
     locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
-    return dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z")
+    try:
+        dt_obj = dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z")
+        return dt_obj
+    except ValueError:
+        return None
 
 async def generate_link(event_name: str, event_time: str) -> str:
     dt_obj = get_dt_obj_from_string(event_time)
-    formatted_time = dt_obj.strftime("%Y%m%d T%H%M%S%z")
-    description = f"Дедлайн добавлен ботом {BOT_NAME} (https://t.me/{BOT_USERNAME})"
-    link = f"https://calendar.google.com/calendar/u/0/r/eventedit?" \
-           f"text={urllib.parse.quote(event_name)}&" \
-           f"dates={formatted_time}/{formatted_time}&details={urllib.parse.quote(description)}&" \
-           f"color=6"
-    return link
+    if dt_obj:
+        formatted_time = dt_obj.strftime("%Y%m%d T%H%M%S%z")
+        description = f"Дедлайн добавлен ботом {BOT_NAME} (https://t.me/{BOT_USERNAME})"
+        link = f"https://calendar.google.com/calendar/u/0/r/eventedit?" \
+               f"text={urllib.parse.quote(event_name)}&" \
+               f"dates={formatted_time}/{formatted_time}&details={urllib.parse.quote(description)}&" \
+               f"color=6"
+
+        return link
+    return ""
+
 
 async def get_human_timedelta(time: str) -> str:
     dt_obj = get_dt_obj_from_string(time)
-    dt_now = dt.datetime.now(dt_obj.tzinfo)  # Ensure timezones are consistent
-    delta = dt_obj - dt_now
+    if dt_obj:
+        dt_now = dt.datetime.now(dt_obj.tzinfo)  # Ensure timezones are consistent
+        delta = dt_obj - dt_now
 
-    total_seconds = int(delta.total_seconds())
-    days = total_seconds // (24 * 3600)
-    hours = (total_seconds % (24 * 3600)) // 3600
-    minutes = (total_seconds % 3600) // 60
+        total_seconds = int(delta.total_seconds())
+        days = total_seconds // (24 * 3600)
+        hours = (total_seconds % (24 * 3600)) // 3600
+        minutes = (total_seconds % 3600) // 60
 
-    if days >= 5:
-        return f"{days} дней"
-    elif days >= 2:
-        return f"{days} дня"
-    elif days == 1:
-        return f"1 день {hours}ч {minutes}м"
-    else:
-        return f"{hours}ч {minutes}м"
+        if days >= 5:
+            return f"{days} дней"
+        elif days >= 2:
+            return f"{days} дня"
+        elif days == 1:
+            return f"1 день {hours}ч {minutes}м"
+        else:
+            return f"{hours}ч {minutes}м"
+    return ""
+
 
 async def get_human_time(time: str) -> str:
     dt_obj = get_dt_obj_from_string(time)
-    locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
-    formatted_date = dt_obj.strftime("%a, %d %B в %H:%M")
-    return formatted_date
+    if dt_obj:
+        locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
+        formatted_date = dt_obj.strftime("%a, %d %B в %H:%M")
+        return formatted_date
+    return ""
+
 
 def timestamp_func(a: dict) -> float:
     time = a["time"].replace('GMT+3', '+0300')
@@ -117,10 +132,15 @@ async def get_message_text() -> str:
         else:
             text += deadlines[i]["name"]
 
-        text += "</b> — "
-        text += await get_human_timedelta(deadlines[i]["time"])
-        text += f"\n(<a href='{await generate_link(deadlines[i]['name'], deadlines[i]['time'])}'>"
-        text += await get_human_time(deadlines[i]["time"]) + "</a>)\n\n"
+        # human_timedelta = await get_human_timedelta(deadlines[i]["time"])
+        link = await generate_link(deadlines[i]['name'], deadlines[i]['time'])
+        human_time = await get_human_time(deadlines[i]["time"])
+
+        if human_time:
+            text += f"</b>\n(<a href='{link}'>"
+            text += human_time + "</a>)\n\n"
+        else:
+            text += "</b> — " + deadlines[i]["time"] + "\n\n"
 
     if len(tests) > 0:
         text += f"\n🧑‍💻 <b>Тесты</b>:\n\n"
@@ -133,8 +153,9 @@ async def get_message_text() -> str:
             else:
                 no += ". "
             text += str(no) + "<b>" + test_name
-            text += "</b> — "
-            text += await get_human_timedelta(tests[i]["time"])
+            # text += "</b> — "
+            text += "</b>"
+            # text += await get_human_timedelta(tests[i]["time"])
             text += f"\n(<a href='{await generate_link(test_name, tests[i]['time'])}'>"
             text += await get_human_time(tests[i]["time"]) + "</a>)\n\n"
 
