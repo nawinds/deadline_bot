@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import requests
@@ -105,7 +106,7 @@ async def get_message_text() -> str:
     try:
         response = requests.get(DEADLINES_URL).json()
     except Exception as e:
-        print(f"Failed to fetch deadlines: {e}")
+        print(f"{datetime.datetime.now()} Failed to fetch deadlines: {e}")
         return ""
     deadlines = response["deadlines"]
 
@@ -167,6 +168,8 @@ async def send_deadlines(chat_id: int) -> None:
     text = await get_message_text()
     msg = await bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
     started_updating = dt.datetime.now()
+    print(datetime.datetime.now(), "Message sent. Msg id:", msg.message_id)
+
     while dt.datetime.now() - started_updating < dt.timedelta(days=1):
         await asyncio.sleep(60)
         try:
@@ -174,8 +177,12 @@ async def send_deadlines(chat_id: int) -> None:
             if text != new_text and new_text != "":
                 await msg.edit_text(new_text, parse_mode="HTML", disable_web_page_preview=True)
                 text = new_text
+                print(datetime.datetime.now(), "Message updated. Msg id:", msg.message_id)
+            else:
+                print(datetime.datetime.now(), "Message update skipped. Msg id:", msg.message_id)
+
         except Exception as e:
-            logging.warning(f"Ошибка при обновлении сообщения: {e}")
+            logging.warning(datetime.datetime.now(),f"{datetime.datetime.now()} Error updating message: {e}")
             continue
     await msg.delete()
 
