@@ -82,11 +82,6 @@ def relevant_filter_func(d: dict) -> bool:
         return False
     return True
 
-def tests_filter_func(d: dict) -> bool:
-    if "[тест]" in d["name"].lower():
-        return True
-    return False
-
 def deadline_type_filter_func(d: dict, dtype: str) -> bool:
     if f"[{dtype.lower()}]" in d["name"].lower():
         return True
