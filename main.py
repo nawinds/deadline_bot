@@ -148,6 +148,7 @@ async def get_message_text() -> str:
 
         for i in range(len(tests)):
             test_name = tests[i]["name"].replace("[Тест] ", "").replace("[тест]", "")
+            test_url = tests[i].get("url")
             no = i + 1
             if no < 11:
                 no = NUMBER_EMOJIS[no] + " "
@@ -155,12 +156,21 @@ async def get_message_text() -> str:
                 no += ". "
             text += str(no) + "<b>" + test_name
             # text += "</b> — "
-            text += "</b>"
+
             # text += await get_human_timedelta(tests[i]["time"])
+            text += str(no) + "<b>"
+
+            if test_url:
+                text += f"<a href='{test_url}'>{test_name}</a>"
+            else:
+                text += test_name
+
+            text += "</b>"
+
             text += f"\n(<a href='{await generate_link(test_name, tests[i]['time'])}'>"
             text += await get_human_time(tests[i]["time"]) + "</a>)\n\n"
 
-    text += f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>" \
+            text += f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>" \
             f"Добавить дедлайн/тест</a>"
     return text
 
