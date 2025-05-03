@@ -97,10 +97,19 @@ def relevant_filter_func(d: dict) -> bool:
         return False
     return True
 
-def deadlines_filter_func(d: dict) -> bool:
+def tests_filter_func(d: dict) -> bool:
     if "[тест]" in d["name"].lower():
-        return False
-    return True
+        return True
+    return False
+
+def deadline_type_filter_func(d: dict, dtype: str) -> bool:
+    if f"[{dtype.lower()}]" in d["name"].lower():
+        return True
+    return False
+
+def deadlines_filter_func(d: dict) -> bool:
+    return (not deadline_type_filter_func(d, "тест") and
+            not deadline_type_filter_func(d, "лекция"))
 
 async def get_message_text() -> str:
     try:
@@ -108,14 +117,17 @@ async def get_message_text() -> str:
     except Exception as e:
         print(f"{datetime.datetime.now()} Failed to fetch deadlines: {e}")
         return ""
-    deadlines = response["deadlines"]
+    all_deadlines = response["deadlines"]
 
-    tests = list(filter(lambda t: not deadlines_filter_func(t) and relevant_filter_func(t), deadlines))
-    deadlines = list(filter(lambda d: deadlines_filter_func(d) and relevant_filter_func(d), deadlines))
+    deadlines = list(filter(lambda d: deadlines_filter_func(d) and relevant_filter_func(d), all_deadlines))
+    tests = list(filter(lambda t: deadline_type_filter_func(t, "тест") and relevant_filter_func(t), all_deadlines))
+    lectures = list(filter(lambda t: deadline_type_filter_func(t, "лекция") and relevant_filter_func(t), all_deadlines))
 
     text = f"🔥️️ <b>Дедлайны</b> (<i>Обновлено в {await get_current_time()} 🔄</i>):\n\n"
-    tests = sorted(tests, key=lambda x: timestamp_func(x))
+
     deadlines = sorted(deadlines, key=lambda x: timestamp_func(x))
+    tests = sorted(tests, key=lambda x: timestamp_func(x))
+    lectures = sorted(lectures, key=lambda x: timestamp_func(x))
 
     if len(deadlines) == 0:
         text += "Дедлайнов нет)\n\n"
@@ -167,12 +179,43 @@ async def get_message_text() -> str:
             text += f"\n(<a href='{await generate_link(test_name, tests[i]['time'])}'>"
             text += await get_human_time(tests[i]["time"]) + "</a>)\n\n"
 
-            text += f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>" \
-            f"Добавить дедлайн/тест</a>"
+    if len(lectures) > 0:
+        text += f"\n👨‍🏫 <b>Лекции</b>:\n\n"
+
+        for i in range(len(lectures)):
+            lecture_name = lectures[i]["name"].replace("[Лекция] ", "").replace("[лекция]", "")
+            lecture_url = lectures[i].get("url")
+            no = i + 1
+            if no < 11:
+                no = NUMBER_EMOJIS[no] + " "
+            else:
+                no += ". "
+            text += str(no) + "<b>"
+
+            if lecture_url:
+                text += f"<a href='{lecture_url}'>{lecture_name}</a>"
+            else:
+                text += lecture_name
+
+            # human_timedelta = await get_human_timedelta(deadlines[i]["time"])
+            link = await generate_link(deadlines[i]['name'], deadlines[i]['time'])
+            human_time = await get_human_time(deadlines[i]["time"])
+
+            if human_time:
+                text += f"</b>\n(<a href='{link}'>"
+                text += human_time + "</a>)\n\n"
+            else:
+                text += "</b> — " + deadlines[i]["time"] + "\n\n"
+
+    text += f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>" \
+            f"Добавить дедлайн</a>"
     return text
 
 async def send_deadlines(chat_id: int) -> None:
     text = await get_message_text()
+    if text == "Дедлайнов нет)\n\n":
+        return
+
     msg = await bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
     started_updating = dt.datetime.now()
     print(datetime.datetime.now(), "Message sent. Msg id:", msg.message_id)
