@@ -154,10 +154,7 @@ async def get_message_text() -> str:
                 no = NUMBER_EMOJIS[no] + " "
             else:
                 no += ". "
-            text += str(no) + "<b>" + test_name
-            # text += "</b> — "
 
-            # text += await get_human_timedelta(tests[i]["time"])
             text += str(no) + "<b>"
 
             if test_url:
