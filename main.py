@@ -115,7 +115,7 @@ def get_message_text() -> str:
             return
 
         nonlocal text
-        REPLACE_PATTERN = re.compile(rf'^\[{replace_name}\]', flags=re.IGNORECASE)
+        REPLACE_PATTERN = re.compile(rf'^\[{replace_name}\] ', flags=re.IGNORECASE)
 
         if category_name:
             text += f"\n<b>{category_name}</b>:\n\n"
