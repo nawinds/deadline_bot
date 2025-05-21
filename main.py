@@ -1,13 +1,15 @@
-import datetime
-import logging
-import os
-import requests
 import asyncio
-from aiogram import Bot
 import datetime as dt
 import locale
-import urllib.parse
+import logging
+import os
 import re
+import urllib.parse
+
+import requests
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.types import LinkPreviewOptions
 
 # Modify the links and data below:
 DEADLINES_URL = "https://m3104.nawinds.dev/DEADLINES.json"
@@ -16,12 +18,17 @@ BOT_NAME = "Дединсайдер M3104"
 BOT_USERNAME = "m3104_deadliner_bot"
 
 # Environment variables that should be available:
-TOKEN: str = os.getenv("TOKEN") # type: ignore
-MAIN_GROUP_ID = int(os.getenv("MAIN_GROUP_ID")) # type: ignore
+TOKEN = os.getenv("TOKEN")
+MAIN_GROUP_ID = int(os.getenv("MAIN_GROUP_ID") or '0')
+EDIT_MESSAGE_ID = int(os.getenv("EDIT_MESSAGE_ID") or '0')
+ADD_CALENDAR_LINK = os.getenv("ADD_CALENDAR_LINK") != 'false'
+
+assert TOKEN, "Missing token!"
+assert MAIN_GROUP_ID, "Missing group ID!"
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(TOKEN)
+bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode='HTML', link_preview=LinkPreviewOptions(is_disabled=True)))
 
 NUMBER_EMOJIS = ['0.', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
 
@@ -91,7 +98,7 @@ def get_message_text() -> str:
     try:
         response = requests.get(DEADLINES_URL).json()
     except Exception as e:
-        print(f"{datetime.datetime.now()} Failed to fetch deadlines: {e}")
+        print(f"{dt.datetime.now()} Failed to fetch deadlines: {e}")
         return ""
     all_deadlines = response["deadlines"]
 
@@ -139,45 +146,58 @@ def get_message_text() -> str:
 
             text += "</b> — "
             text += get_human_timedelta(item["time"])
-            text += f"\n(<a href='{generate_link(name, item['time'])}'>"
-            text += get_human_time(item["time"]) + "</a>)\n\n"
+            if ADD_CALENDAR_LINK:
+                text += f"\n(<a href='{generate_link(name, item['time'])}'>"
+                text += get_human_time(item["time"]) + "</a>)\n\n"
+            else:
+                text += f'\n({get_human_time(item["time"])})\n\n'
 
     for assignment_type in assignments:
         add_items(*assignment_type)
 
-    text += f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>" \
-            f"Добавить дедлайн</a>"
+    text += (
+        f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>"
+        f"Добавить дедлайн</a>"
+    )
+
     return text
 
 async def send_deadlines(chat_id: int) -> None:
     text = get_message_text()
-    if text == "Дедлайнов нет)\n\n":
-        return
 
-    msg = await bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
+    if EDIT_MESSAGE_ID:
+        msg = await bot.edit_message_text(text, chat_id=chat_id, message_id=EDIT_MESSAGE_ID)
+        assert not isinstance(msg, bool), 'EDIT_MESSAGE_ID is not a message!'
+    else:
+        msg = await bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
     started_updating = dt.datetime.now()
-    print(datetime.datetime.now(), "Message sent. Msg id:", msg.message_id)
+    print(dt.datetime.now(), "Message sent. Msg id:", msg.message_id)
 
-    while dt.datetime.now() - started_updating < dt.timedelta(days=1):
+    condition = (lambda: True) if EDIT_MESSAGE_ID else (lambda: dt.datetime.now() - started_updating < dt.timedelta(days=1))
+    while condition():
         await asyncio.sleep(60)
         try:
             new_text = get_message_text()
             if text != new_text and new_text != "":
                 await msg.edit_text(new_text, parse_mode="HTML", disable_web_page_preview=True)
                 text = new_text
-                print(datetime.datetime.now(), "Message updated. Msg id:", msg.message_id)
+                print(dt.datetime.now(), "Message updated. Msg id:", msg.message_id)
             else:
-                print(datetime.datetime.now(), "Message update skipped. Msg id:", msg.message_id)
+                print(dt.datetime.now(), "Message update skipped. Msg id:", msg.message_id)
 
         except Exception as e:
-            logging.warning(datetime.datetime.now(),f"{datetime.datetime.now()} Error updating message: {e}")
+            logging.warning(dt.datetime.now(),f"{dt.datetime.now()} Error updating message: {e}")
             continue
-    await msg.delete()
+
+    if not EDIT_MESSAGE_ID:
+        await msg.delete()
 
 
 async def main():
-    await send_deadlines(MAIN_GROUP_ID)
-    await bot.session.close()
+    try:
+        await send_deadlines(MAIN_GROUP_ID)
+    finally:
+        await bot.session.close()
 
 
 if __name__ == '__main__':
