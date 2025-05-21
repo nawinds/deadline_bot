@@ -1,13 +1,12 @@
-import datetime
-import logging
-import os
-import requests
-import asyncio
-from aiogram import Bot
 import datetime as dt
 import locale
-import urllib.parse
+import logging
+import os
 import re
+import time
+import urllib.parse
+
+import requests
 
 # Modify the links and data below:
 DEADLINES_URL = "https://m3104.nawinds.dev/DEADLINES.json"
@@ -16,14 +15,63 @@ BOT_NAME = "Дединсайдер M3104"
 BOT_USERNAME = "m3104_deadliner_bot"
 
 # Environment variables that should be available:
-TOKEN: str = os.getenv("TOKEN") # type: ignore
-MAIN_GROUP_ID = int(os.getenv("MAIN_GROUP_ID")) # type: ignore
+API_URL = 'https://api.telegram.org/bot'
+TOKEN = os.getenv("TOKEN")
+MAIN_GROUP_ID = int(os.getenv("MAIN_GROUP_ID") or '0')
+EDIT_MESSAGE_ID = int(os.getenv("EDIT_MESSAGE_ID") or '0')
+ADD_CALENDAR_LINK = os.getenv("ADD_CALENDAR_LINK") != 'false'
+
+assert TOKEN, "Missing token!"
+assert MAIN_GROUP_ID, "Missing group ID!"
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(TOKEN)
-
 NUMBER_EMOJIS = ['0.', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+
+
+class TelegramException(Exception):
+    def __init__(self, *, error_code: int, description: str, **_):
+        super().__init__(f'Error {error_code}: {description}')
+        self.error_code = error_code
+        self.description = description
+
+
+def telegram_request(method: str, args: dict):
+    data = requests.post(API_URL + f'{TOKEN}/{method}', json=args).json()
+    if not data['ok']:
+        raise TelegramException(**data)
+    return data
+
+
+def send_message(text: str) -> int:
+    return telegram_request('sendMessage', {
+        'chat_id': MAIN_GROUP_ID,
+        'parse_mode': 'HTML',
+        'text': text,
+        'link_preview_options': {
+            'is_disabled': True
+        }
+    })['result']['message_id']
+
+
+def edit_message(message_id: int, text: str) -> int:
+    return telegram_request('editMessageText', {
+        'chat_id': MAIN_GROUP_ID,
+        'parse_mode': 'HTML',
+        'message_id': message_id,
+        'text': text,
+        'link_preview_options': {
+            'is_disabled': True
+        }
+    })['result']['message_id']
+
+
+def delete_message(message_id: int) -> bool:
+    return telegram_request('deleteMessage', {
+        'chat_id': MAIN_GROUP_ID,
+        'message_id': message_id
+    })['result']
+
 
 def get_current_time() -> str:
     current_time = dt.datetime.now()
@@ -31,10 +79,12 @@ def get_current_time() -> str:
     current_time_minute = current_time.minute if current_time.minute >= 10 else "0" + str(current_time.minute)
     return f"{current_time_hour}:{current_time_minute}"
 
+
 def get_dt_obj_from_string(time: str) -> dt.datetime:
     time = time.replace('GMT+3', '+0300')
     locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
     return dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z")
+
 
 def generate_link(event_name: str, event_time: str) -> str:
     dt_obj = get_dt_obj_from_string(event_time)
@@ -45,6 +95,7 @@ def generate_link(event_name: str, event_time: str) -> str:
            f"dates={formatted_time}/{formatted_time}&details={urllib.parse.quote(description)}&" \
            f"color=6"
     return link
+
 
 def get_human_timedelta(time: str) -> str:
     dt_obj = get_dt_obj_from_string(time)
@@ -65,11 +116,13 @@ def get_human_timedelta(time: str) -> str:
     else:
         return f"{hours}ч {minutes}м"
 
+
 def get_human_time(time: str) -> str:
     dt_obj = get_dt_obj_from_string(time)
     locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
     formatted_date = dt_obj.strftime("%a, %d %B в %H:%M")
     return formatted_date
+
 
 def timestamp_func(a: dict) -> float:
     time = a["time"].replace('GMT+3', '+0300')
@@ -77,9 +130,11 @@ def timestamp_func(a: dict) -> float:
     a_timestamp = dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z").timestamp()
     return a_timestamp  # 29 Oct 2024 23:59:59 GMT+3
 
+
 def relevant_filter_func(d: dict) -> bool:
     dt_obj = get_dt_obj_from_string(d["time"])
     return not dt_obj < dt.datetime.now(dt_obj.tzinfo)
+
 
 def deadline_type_filter_func(d: dict, dtype: str = '') -> bool:
     if not dtype:
@@ -87,11 +142,12 @@ def deadline_type_filter_func(d: dict, dtype: str = '') -> bool:
 
     return f"[{dtype.lower()}]" in d["name"].lower()
 
+
 def get_message_text() -> str:
     try:
         response = requests.get(DEADLINES_URL).json()
     except Exception as e:
-        print(f"{datetime.datetime.now()} Failed to fetch deadlines: {e}")
+        print(f"{dt.datetime.now()} Failed to fetch deadlines: {e}")
         return ""
     all_deadlines = response["deadlines"]
 
@@ -139,46 +195,52 @@ def get_message_text() -> str:
 
             text += "</b> — "
             text += get_human_timedelta(item["time"])
-            text += f"\n(<a href='{generate_link(name, item['time'])}'>"
-            text += get_human_time(item["time"]) + "</a>)\n\n"
+            if ADD_CALENDAR_LINK:
+                text += f"\n(<a href='{generate_link(name, item['time'])}'>"
+                text += get_human_time(item["time"]) + "</a>)\n\n"
+            else:
+                text += f'\n({get_human_time(item["time"])})\n\n'
 
     for assignment_type in assignments:
         add_items(*assignment_type)
 
-    text += f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>" \
-            f"Добавить дедлайн</a>"
+    text += (
+        f"\n🆕 <a href='{ADD_DEADLINE_LINK}'>"
+        f"Добавить дедлайн</a>"
+    )
+
     return text
 
-async def send_deadlines(chat_id: int) -> None:
+
+def main() -> None:
     text = get_message_text()
-    if text == "Дедлайнов нет)\n\n":
-        return
 
-    msg = await bot.send_message(chat_id, text, parse_mode="HTML", disable_web_page_preview=True)
+    if EDIT_MESSAGE_ID:
+        msg_id = edit_message(EDIT_MESSAGE_ID, text)
+    else:
+        msg_id = send_message(text)
     started_updating = dt.datetime.now()
-    print(datetime.datetime.now(), "Message sent. Msg id:", msg.message_id)
+    print(dt.datetime.now(), "Message sent. Msg id:", msg_id)
 
-    while dt.datetime.now() - started_updating < dt.timedelta(days=1):
-        await asyncio.sleep(60)
+    condition = (lambda: True) if EDIT_MESSAGE_ID else (lambda: dt.datetime.now() - started_updating < dt.timedelta(days=1))
+    while condition():
+        time.sleep(60)
         try:
             new_text = get_message_text()
             if text != new_text and new_text != "":
-                await msg.edit_text(new_text, parse_mode="HTML", disable_web_page_preview=True)
+                edit_message(msg_id, new_text)
                 text = new_text
-                print(datetime.datetime.now(), "Message updated. Msg id:", msg.message_id)
+                print(dt.datetime.now(), "Message updated. Msg id:", msg_id)
             else:
-                print(datetime.datetime.now(), "Message update skipped. Msg id:", msg.message_id)
+                print(dt.datetime.now(), "Message update skipped. Msg id:", msg_id)
 
         except Exception as e:
-            logging.warning(datetime.datetime.now(),f"{datetime.datetime.now()} Error updating message: {e}")
+            logging.warning(dt.datetime.now(),f"{dt.datetime.now()} Error updating message: {e}")
             continue
-    await msg.delete()
 
-
-async def main():
-    await send_deadlines(MAIN_GROUP_ID)
-    await bot.session.close()
+    if not EDIT_MESSAGE_ID:
+        delete_message(msg_id)
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
