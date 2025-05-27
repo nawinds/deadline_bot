@@ -92,8 +92,7 @@ def generate_link(event_name: str, event_time: str) -> str:
     description = f"Дедлайн добавлен ботом {BOT_NAME} (https://t.me/{BOT_USERNAME})"
     link = f"https://calendar.google.com/calendar/u/0/r/eventedit?" \
            f"text={urllib.parse.quote(event_name)}&" \
-           f"dates={formatted_time}/{formatted_time}&details={urllib.parse.quote(description)}&" \
-           f"color=6"
+           f"dates={formatted_time}/{formatted_time}"
     return link
 
 
