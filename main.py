@@ -9,9 +9,9 @@ import urllib.parse
 import requests
 
 # Modify the links and data below:
-DEADLINES_URL = "https://m3104.nawinds.dev/DEADLINES.json"
-ADD_DEADLINE_LINK = "https://m3104.nawinds.dev/deadlines-editing-instructions/"
-BOT_NAME = "Дединсайдер M3104"
+DEADLINES_URL = "https://m3204.nawinds.dev/DEADLINES.json"
+ADD_DEADLINE_LINK = "https://m3204.nawinds.dev/deadlines-editing-instructions/"
+BOT_NAME = "Дединсайдер M3204"
 BOT_USERNAME = "m3104_deadliner_bot"
 
 # Environment variables that should be available:
