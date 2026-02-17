@@ -8,7 +8,7 @@ import urllib.parse
 
 import requests
 
-# Modify the links and data below:
+# Modify the links and data below
 DEADLINES_URL = "https://m3204.nawinds.dev/DEADLINES.json"
 ADD_DEADLINE_LINK = "https://m3204.nawinds.dev/deadlines-editing-instructions/"
 BOT_NAME = "Дединсайдер M3204"
