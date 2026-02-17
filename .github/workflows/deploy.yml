@@ -18,8 +18,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
 
       - name: Deploy Files using Rsync
         run: |
-          rsync -avz --exclude='.git' -e "ssh" $GITHUB_WORKSPACE/ ${{ secrets.USERNAME }}@${{ secrets.SERVER_IP }}:${{ secrets.M3208_PROJECT_PATH }}
+          rsync -avz --exclude='.git' -e "ssh -p ${{ secrets.SSH_PORT }}" $GITHUB_WORKSPACE/ ${{ secrets.USERNAME }}@${{ secrets.SERVER_IP }}:${{ secrets.M3208_PROJECT_PATH }}
