@@ -196,9 +196,9 @@ def get_message_text() -> str:
 
     text = f"🔥️️ <b>Дедлайны</b> (<i>Обновлено в {get_current_time()} 🔄</i>):\n\n"
 
-    # Проверяем, есть ли дедлайны без типа (основные)
-    if not assignments[0][0]:
-        text += "Дедлайнов нет)\n\n"
+    # # Проверяем, есть ли дедлайны без типа (основные)
+    # if not assignments[0][0]:
+    #     text += "\n\n"
 
     def add_items(items: list, category_name: str = '', replace_name: str = ''):
         if len(items) == 0:
