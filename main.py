@@ -5,6 +5,7 @@ import os
 import re
 import time
 import urllib.parse
+import sys
 
 import requests
 
@@ -24,7 +25,14 @@ ADD_CALENDAR_LINK = os.getenv("ADD_CALENDAR_LINK") != 'false'
 assert TOKEN, "Missing token!"
 assert MAIN_GROUP_ID, "Missing group ID!"
 
-logging.basicConfig(level=logging.INFO)
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 NUMBER_EMOJIS = ['0.', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
 
@@ -37,10 +45,14 @@ class TelegramException(Exception):
 
 
 def telegram_request(method: str, args: dict):
-    data = requests.post(API_URL + f'{TOKEN}/{method}', json=args).json()
-    if not data['ok']:
-        raise TelegramException(**data)
-    return data
+    try:
+        data = requests.post(API_URL + f'{TOKEN}/{method}', json=args, timeout=30).json()
+        if not data['ok']:
+            raise TelegramException(**data)
+        return data
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Network error in {method}: {e}")
+        raise
 
 
 def send_message(text: str) -> int:
@@ -82,13 +94,16 @@ def get_current_time() -> str:
 
 def get_dt_obj_from_string(time: str) -> dt.datetime:
     time = time.replace('GMT+3', '+0300')
-    locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
+    try:
+        locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
+    except locale.Error:
+        locale.setlocale(locale.LC_TIME, 'C')
     return dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z")
 
 
 def generate_link(event_name: str, event_time: str) -> str:
     dt_obj = get_dt_obj_from_string(event_time)
-    formatted_time = dt_obj.strftime("%Y%m%d T%H%M%S%z")
+    formatted_time = dt_obj.strftime("%Y%m%dT%H%M%S%z")
     description = f"Дедлайн добавлен ботом {BOT_NAME} (https://t.me/{BOT_USERNAME})"
     link = f"https://calendar.google.com/calendar/u/0/r/eventedit?" \
            f"text={urllib.parse.quote(event_name)}&" \
@@ -98,7 +113,7 @@ def generate_link(event_name: str, event_time: str) -> str:
 
 def get_human_timedelta(time: str) -> str:
     dt_obj = get_dt_obj_from_string(time)
-    dt_now = dt.datetime.now(dt_obj.tzinfo)  # Ensure timezones are consistent
+    dt_now = dt.datetime.now(dt_obj.tzinfo)
     delta = dt_obj - dt_now
 
     total_seconds = int(delta.total_seconds())
@@ -118,16 +133,22 @@ def get_human_timedelta(time: str) -> str:
 
 def get_human_time(time: str) -> str:
     dt_obj = get_dt_obj_from_string(time)
-    locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
+    try:
+        locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
+    except locale.Error:
+        locale.setlocale(locale.LC_TIME, 'C')
     formatted_date = dt_obj.strftime("%a, %d %B в %H:%M")
     return formatted_date
 
 
 def timestamp_func(a: dict) -> float:
     time = a["time"].replace('GMT+3', '+0300')
-    locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
+    try:
+        locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
+    except locale.Error:
+        locale.setlocale(locale.LC_TIME, 'C')
     a_timestamp = dt.datetime.strptime(time, "%d %b %Y %H:%M:%S %z").timestamp()
-    return a_timestamp  # 29 Oct 2024 23:59:59 GMT+3
+    return a_timestamp
 
 
 def relevant_filter_func(d: dict) -> bool:
@@ -144,14 +165,15 @@ def deadline_type_filter_func(d: dict, dtype: str = '') -> bool:
 
 def get_message_text() -> str:
     try:
-        response = requests.get(DEADLINES_URL).json()
+        response = requests.get(DEADLINES_URL, timeout=30).json()
     except Exception as e:
-        print(f"{dt.datetime.now()} Failed to fetch deadlines: {e}")
+        logging.error(f"Failed to fetch deadlines: {e}")
         return ""
-    all_deadlines = response["deadlines"]
+
+    all_deadlines = response.get("deadlines", [])
 
     types = [
-        ('', ''), # deadlines
+        ('', ''),  # deadlines
         ('🧑‍💻 Тесты', 'тест'),
         ('🛡 Защиты', 'защита'),
         ('🎓 Лекции', 'лекция'),
@@ -159,12 +181,14 @@ def get_message_text() -> str:
         ('👞 Консультации', 'консультация'),
     ]
 
-    assignments = [(sorted(filter(lambda t: deadline_type_filter_func(t, x[1]) and relevant_filter_func(t), all_deadlines),
-                           key=lambda z: timestamp_func(z)), x[0], x[1]) for x in types]
+    assignments = []
+    for x in types:
+        filtered = list(filter(lambda t: deadline_type_filter_func(t, x[1]) and relevant_filter_func(t), all_deadlines))
+        assignments.append((sorted(filtered, key=lambda z: timestamp_func(z)), x[0], x[1]))
 
     text = f"🔥️️ <b>Дедлайны</b> (<i>Обновлено в {get_current_time()} 🔄</i>):\n\n"
 
-    if len(assignments[0]) == 0:
+    if len(assignments[0][0]) == 0:
         text += "Дедлайнов нет)\n\n"
 
     def add_items(items: list, category_name: str = '', replace_name: str = ''):
@@ -214,33 +238,63 @@ def get_message_text() -> str:
 
 
 def main() -> None:
-    text = get_message_text()
-
+    # Проверяем, есть ли EDIT_MESSAGE_ID
     if EDIT_MESSAGE_ID:
-        msg_id = edit_message(EDIT_MESSAGE_ID, text)
-    else:
-        msg_id = send_message(text)
-    started_updating = dt.datetime.now()
-    print(dt.datetime.now(), "Message sent. Msg id:", msg_id)
+        # Режим обновления существующего сообщения
+        text = get_message_text()
+        if not text:
+            logging.error("Failed to get initial message text")
+            return
 
-    condition = (lambda: True) if EDIT_MESSAGE_ID else (lambda: dt.datetime.now() - started_updating < dt.timedelta(days=1))
-    while condition():
-        time.sleep(60)
         try:
-            new_text = get_message_text()
-            if text != new_text and new_text != "":
-                edit_message(msg_id, new_text)
-                text = new_text
-                print(dt.datetime.now(), "Message updated. Msg id:", msg_id)
-            else:
-                print(dt.datetime.now(), "Message update skipped. Msg id:", msg_id)
+            edit_message(EDIT_MESSAGE_ID, text)
+            logging.info(f"Message updated successfully. Msg id: {EDIT_MESSAGE_ID}")
+        except TelegramException as e:
+            logging.error(f"Failed to update message: {e}")
+            return
+    else:
+        # Режим создания нового сообщения (работает 24 часа)
+        text = get_message_text()
+        if not text:
+            logging.error("Failed to get initial message text")
+            return
 
+        msg_id = send_message(text)
+        logging.info(f"New message sent. Msg id: {msg_id}")
+
+        started_updating = dt.datetime.now()
+
+        # Цикл обновления в течение 24 часов
+        while dt.datetime.now() - started_updating < dt.timedelta(days=1):
+            time.sleep(60)
+            try:
+                new_text = get_message_text()
+                if new_text and text != new_text:
+                    edit_message(msg_id, new_text)
+                    text = new_text
+                    logging.info(f"Message updated. Msg id: {msg_id}")
+                else:
+                    logging.debug(f"Message update skipped (no changes). Msg id: {msg_id}")
+            except TelegramException as e:
+                if e.error_code == 400:  # Message not found (удалено)
+                    logging.warning(f"Message {msg_id} was deleted, exiting")
+                    break
+                elif e.error_code == 429:  # Too Many Requests
+                    logging.warning(f"Rate limited, waiting 60s")
+                    time.sleep(60)
+                else:
+                    logging.error(f"Error updating message: {e}")
+                    time.sleep(60)
+            except Exception as e:
+                logging.error(f"Unexpected error: {e}")
+                time.sleep(60)
+
+        # Удаляем сообщение после 24 часов
+        try:
+            delete_message(msg_id)
+            logging.info(f"Message deleted after 24 hours. Msg id: {msg_id}")
         except Exception as e:
-            logging.warning(dt.datetime.now(),f"{dt.datetime.now()} Error updating message: {e}")
-            continue
-
-    if not EDIT_MESSAGE_ID:
-        delete_message(msg_id)
+            logging.error(f"Failed to delete message: {e}")
 
 
 if __name__ == '__main__':
