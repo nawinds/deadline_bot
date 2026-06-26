@@ -172,8 +172,16 @@ def get_message_text() -> str:
 
     all_deadlines = response.get("deadlines", [])
 
+    # Фильтруем только актуальные дедлайны
+    relevant_deadlines = list(filter(relevant_filter_func, all_deadlines))
+
+    # Если вообще нет актуальных дедлайнов - возвращаем пустую строку
+    if not relevant_deadlines:
+        logging.info("No relevant deadlines found")
+        return ""
+
     types = [
-        ('', ''),  # deadlines
+        ('', ''),  # deadlines без типа
         ('🧑‍💻 Тесты', 'тест'),
         ('🛡 Защиты', 'защита'),
         ('🎓 Лекции', 'лекция'),
@@ -183,12 +191,13 @@ def get_message_text() -> str:
 
     assignments = []
     for x in types:
-        filtered = list(filter(lambda t: deadline_type_filter_func(t, x[1]) and relevant_filter_func(t), all_deadlines))
+        filtered = list(filter(lambda t: deadline_type_filter_func(t, x[1]), relevant_deadlines))
         assignments.append((sorted(filtered, key=lambda z: timestamp_func(z)), x[0], x[1]))
 
     text = f"🔥️️ <b>Дедлайны</b> (<i>Обновлено в {get_current_time()} 🔄</i>):\n\n"
 
-    if len(assignments[0][0]) == 0:
+    # Проверяем, есть ли дедлайны без типа (основные)
+    if not assignments[0][0]:
         text += "Дедлайнов нет)\n\n"
 
     def add_items(items: list, category_name: str = '', replace_name: str = ''):
@@ -226,6 +235,7 @@ def get_message_text() -> str:
             else:
                 text += f'\n({get_human_time(item["time"])})\n\n'
 
+    # Добавляем все категории
     for assignment_type in assignments:
         add_items(*assignment_type)
 
@@ -238,27 +248,28 @@ def get_message_text() -> str:
 
 
 def main() -> None:
-    # Проверяем, есть ли EDIT_MESSAGE_ID
+    # Получаем текст сообщения
+    text = get_message_text()
+
+    # Если нет дедлайнов - ничего не делаем
+    if not text:
+        logging.info("No deadlines to display. Exiting.")
+        return
+
     if EDIT_MESSAGE_ID:
         # Режим обновления существующего сообщения
-        text = get_message_text()
-        if not text:
-            logging.error("Failed to get initial message text")
-            return
-
         try:
             edit_message(EDIT_MESSAGE_ID, text)
             logging.info(f"Message updated successfully. Msg id: {EDIT_MESSAGE_ID}")
         except TelegramException as e:
-            logging.error(f"Failed to update message: {e}")
-            return
+            if e.error_code == 400:  # Message not found
+                logging.warning(f"Message {EDIT_MESSAGE_ID} not found, creating new")
+                msg_id = send_message(text)
+                logging.info(f"New message created. Msg id: {msg_id}")
+            else:
+                logging.error(f"Failed to update message: {e}")
     else:
         # Режим создания нового сообщения (работает 24 часа)
-        text = get_message_text()
-        if not text:
-            logging.error("Failed to get initial message text")
-            return
-
         msg_id = send_message(text)
         logging.info(f"New message sent. Msg id: {msg_id}")
 
@@ -269,12 +280,20 @@ def main() -> None:
             time.sleep(60)
             try:
                 new_text = get_message_text()
-                if new_text and text != new_text:
+
+                # Если дедлайны закончились - удаляем сообщение и выходим
+                if not new_text:
+                    logging.info("No more deadlines. Deleting message.")
+                    delete_message(msg_id)
+                    break
+
+                if text != new_text:
                     edit_message(msg_id, new_text)
                     text = new_text
                     logging.info(f"Message updated. Msg id: {msg_id}")
                 else:
                     logging.debug(f"Message update skipped (no changes). Msg id: {msg_id}")
+
             except TelegramException as e:
                 if e.error_code == 400:  # Message not found (удалено)
                     logging.warning(f"Message {msg_id} was deleted, exiting")
@@ -289,7 +308,7 @@ def main() -> None:
                 logging.error(f"Unexpected error: {e}")
                 time.sleep(60)
 
-        # Удаляем сообщение после 24 часов
+        # Удаляем сообщение после 24 часов, если оно еще существует
         try:
             delete_message(msg_id)
             logging.info(f"Message deleted after 24 hours. Msg id: {msg_id}")
